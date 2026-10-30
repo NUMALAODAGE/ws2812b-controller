@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Local SDK config
+local.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Keystore / signing
+*.keystore
+*.jks
+
+# APK output (published as Release asset instead)
+*.apk
+*.idsig
