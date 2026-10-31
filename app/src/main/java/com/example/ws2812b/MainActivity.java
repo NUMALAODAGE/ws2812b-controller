@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -32,7 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements DebugPanel.AddressProvider {
 
     private static final int SEG_COUNT = 11;
     private static final int PORT = 8080;
@@ -71,6 +72,11 @@ public class MainActivity extends Activity {
     private EditText addressInput;
     private TextView statusText;
     private int requestSeq = 0;
+
+    private LinearLayout controlContainer;
+    private DebugPanel debugPanel;
+    private Button tabControl;
+    private Button tabDebug;
 
     private static final class HttpStatusException extends IOException {
         final int code;
@@ -125,11 +131,28 @@ public class MainActivity extends Activity {
         subtitle.setPadding(dp(16), 0, dp(16), dp(6));
         root.addView(subtitle);
 
+        LinearLayout tabs = new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        tabs.setPadding(dp(16), dp(6), dp(16), dp(6));
+        root.addView(tabs);
+
+        tabControl = makeTab("控制");
+        tabDebug = makeTab("调试");
+        tabs.addView(tabControl, tabParams());
+        tabs.addView(tabDebug, tabParams());
+        tabControl.setOnClickListener(v -> showTab(false));
+        tabDebug.setOnClickListener(v -> showTab(true));
+
+        controlContainer = new LinearLayout(this);
+        controlContainer.setOrientation(LinearLayout.VERTICAL);
+        root.addView(controlContainer, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(16), dp(6), dp(16), dp(2));
-        root.addView(header, new LinearLayout.LayoutParams(
+        controlContainer.addView(header, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         addressInput = new EditText(this);
@@ -155,6 +178,7 @@ public class MainActivity extends Activity {
         connect.setOnClickListener(v -> {
             prefs.edit().putString(KEY_ADDRESS, addressInput.getText().toString().trim()).apply();
             hideKeyboard();
+            debugPanel.syncBase(baseUrl());
             fetchState();
         });
 
@@ -163,11 +187,11 @@ public class MainActivity extends Activity {
         statusText.setTextColor(COLOR_TEXT_DIM);
         statusText.setTextSize(13);
         statusText.setPadding(dp(16), dp(8), dp(16), dp(4));
-        root.addView(statusText);
+        controlContainer.addView(statusText);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        root.addView(scroll, new LinearLayout.LayoutParams(
+        controlContainer.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         LinearLayout list = new LinearLayout(this);
@@ -220,12 +244,46 @@ public class MainActivity extends Activity {
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setBackgroundColor(COLOR_BAR);
         bar.setPadding(dp(12), dp(10), dp(12), dp(10));
-        root.addView(bar, new LinearLayout.LayoutParams(
+        controlContainer.addView(bar, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         addBarButton(bar, "全正流", COLOR_ON).setOnClickListener(v -> applyAll("0"));
         addBarButton(bar, "全倒流", COLOR_REV).setOnClickListener(v -> applyAll("1"));
         addBarButton(bar, "全灭", COLOR_OFF).setOnClickListener(v -> applyAll("x"));
+
+        debugPanel = new DebugPanel(this, io, this);
+        root.addView(debugPanel, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        showTab(false);
+    }
+
+    private Button makeTab(String text) {
+        Button b = new Button(this);
+        styleButton(b, COLOR_IDLE, COLOR_TEXT_DIM, 14, 9);
+        b.setText(text);
+        return b;
+    }
+
+    private LinearLayout.LayoutParams tabParams() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        params.leftMargin = dp(4);
+        params.rightMargin = dp(4);
+        return params;
+    }
+
+    private void showTab(boolean debug) {
+        controlContainer.setVisibility(debug ? View.GONE : View.VISIBLE);
+        debugPanel.setVisibility(debug ? View.VISIBLE : View.GONE);
+        styleButton(tabControl, debug ? COLOR_IDLE : COLOR_ON,
+                debug ? COLOR_TEXT_DIM : Color.WHITE, 14, 9);
+        styleButton(tabDebug, debug ? COLOR_ON : COLOR_IDLE,
+                debug ? Color.WHITE : COLOR_TEXT_DIM, 14, 9);
+        hideKeyboard();
+    }
+
+    @Override
+    public String currentBaseUrl() {
+        return baseUrl();
     }
 
     private Button addBarButton(LinearLayout parent, String text, int color) {
